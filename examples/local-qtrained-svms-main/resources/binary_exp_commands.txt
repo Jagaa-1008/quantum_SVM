@@ -1,0 +1,21 @@
+./FaLK-SVM-train.out -P 0.75 -q 0 -t 2 -v 10 -L 1 -N 80 -G -0.5:1 -C 3 -M 8 -o 5 -l 1 -s 17 datasets/svmlight_datasets/binary/toulouse_t4_2c_500s.txt results/binary/falk_svm_c/toulouse_t4_2c_500s/model.txt > results/binary/falk_svm_c/toulouse_t4_2c_500s/log.txt
+
+./FaLK-SVM-train.out -P 0.75 -q 1 -t 2 -z 0 -n results/binary/falk_svm_q/toulouse_t4_2c_500s/embeddings -v 10 -L 1 -N 80 -G -0.5:1 -C 3 -B 2 -A 2 -I 1 -E 1 -M 8 -o 5 -l 1 -s 17 datasets/svmlight_datasets/binary/toulouse_t4_2c_500s.txt results/binary/falk_svm_q/toulouse_t4_2c_500s/model.txt > results/binary/falk_svm_q/toulouse_t4_2c_500s/log.txt
+
+cd comparison_utils/
+./run_svm_on_folds.sh -l LibSVM_2.88 -f ../results/binary/falk_svm_c/toulouse_t4_2c_500s -b model -n 10 -t 2 -g 1 -c 3 -o ../results/binary/svm_c/toulouse_t4_2c_500s > ../results/binary/svm_c/toulouse_t4_2c_500s/log.txt
+
+cd comparison_utils/
+./run_python_svm_on_folds.sh -m ../Python_models -f ../results/binary/falk_svm_q/toulouse_t4_2c_500s -l model -v 10 -z 0 -t 2 -g 1 -c 3 -b 2 -a 2 -i 1 -e 1 -o ../results/binary/svm_q/toulouse_t4_2c_500s > ../results/binary/svm_q/toulouse_t4_2c_500s/log.txt
+
+
+./FaLK-SVM-train.out -P 0.75 -q 0 -t 2 -v 10 -L 1 -N 80 -G -0.5:1 -C 3 -M 8 -o 5 -l 1 -s 17 datasets/svmlight_datasets/binary/potsdam_t6.9_2c_500s.txt results/binary/falk_svm_c/potsdam_t6.9_2c_500s/model.txt > results/binary/falk_svm_c/potsdam_t6.9_2c_500s/log.txt
+
+./FaLK-SVM-train.out -P 0.75 -q 1 -t 2 -z 0 -n results/binary/falk_svm_q/potsdam_t6.9_2c_500s/embeddings -v 10 -L 1 -N 80 -G -0.5:1 -C 3 -B 2 -A 2 -I 1 -E 1 -M 8 -o 5 -l 1 -s 17 datasets/svmlight_datasets/binary/potsdam_t6.9_2c_500s.txt results/binary/falk_svm_q/potsdam_t6.9_2c_500s/model.txt > results/binary/falk_svm_q/potsdam_t6.9_2c_500s/log.txt
+
+cd comparison_utils/
+./run_svm_on_folds.sh -l LibSVM_2.88 -f ../results/binary/falk_svm_c/potsdam_t6.9_2c_500s -b model -n 10 -t 2 -g 1 -c 3 -o ../results/binary/svm_c/potsdam_t6.9_2c_500s > ../results/binary/svm_c/potsdam_t6.9_2c_500s/log.txt
+
+cd comparison_utils/
+./run_python_svm_on_folds.sh -m ../Python_models -f ../results/binary/falk_svm_q/potsdam_t6.9_2c_500s -l model -v 10 -z 0 -t 2 -g 1 -c 3 -b 2 -a 2 -i 1 -e 1 -o ../results/binary/svm_q/potsdam_t6.9_2c_500s > ../results/binary/svm_q/potsdam_t6.9_2c_500s/log.txt
+

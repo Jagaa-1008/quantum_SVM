@@ -1,0 +1,14 @@
+# Tokens
+token = 'DEV-f45e6ce463ed5ee230126cc1d46c7bcbd8bf38c2' #s21
+token = 'DEV-b3591d636174d4dcd3584a7ea29829d424e703b3'  #happy
+token = 'DEV-e6f6f6bb339c85b8cd1357653152e575cd618efb' #saihnaa_0810
+token = 'DEV-b053fab6a77ea81c45bddcadbe236d614582722d' #jagaa.hn
+token = 'DEV-aba3d2aa6beefa052a6111ef23cff93e69e61520' #hirai senpai №1
+token = 'DEV-e60c82cdec6800f02e226fa515dca24017db2e2d' #hirai senpai №2
+token = 'T6nD-003e8847b163bdf7bb0adf388dc62fb50e697cb0' #mohzeki
+token = 'DEV-5633fad86ebc7f7d0a6b12783350c90bb1d67d2a' #s234051x
+token = 'DEV-6da2bd02ade6714dd059d5b3893ab56bcf87e422' #Shimada moe senpai No.1
+token = 'DEV-e4041c914cfe16a728e4f707d55bb5f69fe9764e' #oyuerdene0214
+token = 'DEV-a04bc240e616b38ce3987e4ce6ac750b24a8eb56' #ke23031030@tsb-yyg.ac.jp
+token = 'DEV-41136e41d44fec846f956cf568a4820cd56c2741' #bi220017@bunka
+token = 'DEV-3adb6333e41cfa2b8e54f63c2634a6fb2e333f71' #jagaa@t-ksj.co.jp

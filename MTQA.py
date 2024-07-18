@@ -82,15 +82,15 @@ def embedding_search(hardware_connectivity, QuboList, chain_strategy):
             Qubo_temp[(p1 + max_index, p2 + max_index)] = element
 
         # Perform the embedding search
-        emb = find_embedding(Qubo_temp, hardware_connectivity, tries=100, max_no_improvement=100, chainlength_patience=100, timeout=100, threads=100)
+        emb = find_embedding(Qubo_temp, hardware_connectivity, tries=10, max_no_improvement=10, chainlength_patience=10, timeout=10, threads=100)
         embedding_list.append(emb)
 
         if emb:
             # Find the chain strength for the current Qubo
             if chain_strategy == "utc":
-                chain_strength = find_chain_strength(Qubo_temp, prefactor = 0.5, method = "UTC")
+                chain_strength = find_chain_strength(Qubo_temp, prefactor = 1.414, method = "UTC")
             else:
-                chain_strength = find_chain_strength(Qubo_temp, prefactor = 1.5, method = "scaled")
+                chain_strength = find_chain_strength(Qubo_temp, prefactor = 1, method = "scaled")
 
             # Save used qubits
             Qubits.append(get_qubit_list(emb))
@@ -116,9 +116,9 @@ def embedding_search(hardware_connectivity, QuboList, chain_strategy):
                 # used_nodes.extend(chain)
                 for node in chain:
                     nodes_to_remove.append(node)
-                    # if hardware_connectivity.has_node(node):  # Check if the node exists in the graph
-                    #     for neighbor in list(hardware_connectivity.neighbors(node)):
-                    #         nodes_to_remove.append(neighbor)
+                    if hardware_connectivity.has_node(node):  # Check if the node exists in the graph
+                        for neighbor in list(hardware_connectivity.neighbors(node)):
+                            nodes_to_remove.append(neighbor)
             
             # Remove nodes
             for node in set(nodes_to_remove):

@@ -40,7 +40,7 @@ class OneVsRestClassifier:
         """
         for i in range(self.class_num):
             print(f"Training classifier {i}...")
-            self.classifiers[i].solve(x, self.re_labaling(y, i))
+            self.classifiers[i].solve(x, self.re_labaling(y, i), i)
         return self
 
     def re_labaling(self, y, pos_label):
@@ -115,7 +115,7 @@ import networkx as nx
 from minorminer import find_embedding
 
 class qSVM():
-    def __init__(self, data, label, B=2, K=2, Xi=1, gamma = 10, C=3, kernel="rbf", optimizer="SA", vis = 0):
+    def __init__(self, data, label, B=2, K=2, Xi=1, gamma = 0.1, C=3, kernel="rbf", optimizer="SA", qubo_list = None, vis = 0):
         """
         :param B:
         :param K:
@@ -156,6 +156,7 @@ class qSVM():
         self.intercept = None
         self.energy = None
         self.emb = None
+        self.qubo_list = qubo_list
 
 
     def rbf(self, x, y):
@@ -228,12 +229,12 @@ class qSVM():
 
         return self
 
-    def solve(self, data, label):
+    def solve(self, data, label, i=None):
         print("solving...")
         qubo = self.makeQUBO(data, label)
 
         if self.optimizer == "SA":
-            sampleset = neal.SimulatedAnnealingSampler().sample_qubo(qubo, num_reads=1000)
+            sampleset = neal.SimulatedAnnealingSampler().sample_qubo(qubo, num_reads=4000)
             best_sample = sampleset.first
             
             self.energy = best_sample[1]
@@ -246,11 +247,15 @@ class qSVM():
             endpoint = 'https://cloud.dwavesys.com/sapi/'
             dw_sampler = DWaveSampler(solver='Advantage_system6.4', token=token, endpoint=endpoint)
 
-            hardware = nx.Graph(dw_sampler.edgelist)
-            emb = find_embedding(qubo, hardware, tries=10, max_no_improvement=10, chainlength_patience=10, timeout=10, threads=100)
-            self.emb = emb
-            sampler = FixedEmbeddingComposite(dw_sampler, embedding=emb)
-            best_sample = sampler.sample_qubo(qubo, num_reads=1000, annealing_time = 20, label='qSVM').first
+            if not self.qubo_list:
+                hardware = nx.Graph(dw_sampler.edgelist)
+                emb = find_embedding(qubo, hardware, tries=10, max_no_improvement=10, chainlength_patience=10, timeout=10, threads=100)
+                sampler = FixedEmbeddingComposite(dw_sampler, embedding=emb)
+                best_sample = sampler.sample_qubo(qubo, num_reads=4000, annealing_time = 20, label='QA_SVM').first
+
+            else:
+                print(i, len(self.qubo_list[i]))
+                best_sample = dw_sampler.sample_qubo(self.qubo_list[i], num_reads = 4000, annealing_time = 20, answer_mode = 'raw', auto_scale = False, label='QA_SVM').first
 
             self.energy = best_sample[1]
             self.alpha_result = list(best_sample[0].values())
@@ -360,8 +365,6 @@ class MTQA_OneVsRestClassifier:
         token = 'DEV-b3591d636174d4dcd3584a7ea29829d424e703b3' #happynice1008@gmail.com
         endpoint = 'https://cloud.dwavesys.com/sapi/'
         dw_sampler = DWaveSampler(solver='Advantage_system6.4', token=token, endpoint=endpoint)
-        numr = 1000
-        anneal_time = 20
 
         hardware = nx.Graph(dw_sampler.edgelist)
 
@@ -378,7 +381,7 @@ class MTQA_OneVsRestClassifier:
             identical_emb.append(slice_dict(sorted_dict, offset_list[i], offset_list[i+1]))
 
         # Solve all classifiers simultaneously with D-Wave mtqa
-        response = dw_sampler.sample_qubo(TotalQubo, num_reads = numr, annealing_time = anneal_time, answer_mode = 'raw', auto_scale = False, label='mtqa_SVM_UTC')
+        response = dw_sampler.sample_qubo(TotalQubo, num_reads = 4000, annealing_time = 20, answer_mode = 'raw', auto_scale = False, label='mtqa_SVM_UTC')
         time.sleep(10)
 
         energy = []
@@ -398,34 +401,35 @@ class MTQA_OneVsRestClassifier:
         for i in range(self.class_num):
             q1 = self.classifiers[i].MTQA_solve(energy[i], alpha[i], x, self.re_labaling(y, i))
 
-        # m=16
-        # P16 = dnx.pegasus_graph(m)
-        # problems = ["Class 0", "Class 1", "Class 2", "Class 3", "Class 4"]
-        # colors = ["Red", "Blue", "Green", "Yellow"]
+        if self.vis:
+            m=16
+            P16 = dnx.pegasus_graph(m)
+            problems = ["Class 0", "Class 1", "Class 2", "Class 3", "Class 4"]
+            colors = ["Red", "Blue", "Green", "Yellow"]
 
-        # clr_dict = {}
-        # indx = 0
-        # for i, j in embeddings.items():
-        #     if i >= offset_list[indx+1]:
-        #         indx += 1
+            clr_dict = {}
+            indx = 0
+            for i, j in embeddings.items():
+                if i >= offset_list[indx+1]:
+                    indx += 1
 
-        #     clr_dict[i] = colors[indx]
-                
-        # dnx.draw_pegasus_embedding(P16, embeddings, crosses=False, chain_color = clr_dict, unused_color = "#CCCCCC", width=0.3, node_size = 0.5)
+                clr_dict[i] = colors[indx]
+                    
+            dnx.draw_pegasus_embedding(P16, embeddings, crosses=False, chain_color = clr_dict, unused_color = "#CCCCCC", width=0.3, node_size = 0.5)
 
-        # # Custom legend
-        # color_patch0 = mpatches.Patch(color=colors[0], label=problems[0])
-        # color_patch1 = mpatches.Patch(color=colors[1], label=problems[1])
-        # color_patch2 = mpatches.Patch(color=colors[2], label=problems[2])
-        # color_patch3 = mpatches.Patch(color=colors[3], label=problems[2])
+            # Custom legend
+            color_patch0 = mpatches.Patch(color=colors[0], label=problems[0])
+            color_patch1 = mpatches.Patch(color=colors[1], label=problems[1])
+            color_patch2 = mpatches.Patch(color=colors[2], label=problems[2])
+            color_patch3 = mpatches.Patch(color=colors[3], label=problems[3])
 
-        # plt.legend(handles=[color_patch0, color_patch1, color_patch2, color_patch3], loc = 'upper left', bbox_to_anchor=(0.92,0.9))
+            plt.legend(handles=[color_patch0, color_patch1, color_patch2, color_patch3], loc = 'upper left', bbox_to_anchor=(0.92,0.9))
 
-        # plt.savefig("results\digit_embeddings_0_4.png",  bbox_inches='tight', dpi = 1000)
+            plt.savefig("results\digit_embeddings_0_3.png",  bbox_inches='tight', dpi = 1000)
 
-        # plt.show
+            plt.show
 
-        return self
+        return self, embedding_list, TotalQubo, Qubo_list
 
     def re_labaling(self, y, pos_label):
         """

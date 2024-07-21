@@ -116,9 +116,9 @@ def embedding_search(hardware_connectivity, QuboList, chain_strategy):
                 # used_nodes.extend(chain)
                 for node in chain:
                     nodes_to_remove.append(node)
-                    if hardware_connectivity.has_node(node):  # Check if the node exists in the graph
-                        for neighbor in list(hardware_connectivity.neighbors(node)):
-                            nodes_to_remove.append(neighbor)
+                    # if hardware_connectivity.has_node(node):  # Check if the node exists in the graph
+                        # for neighbor in list(hardware_connectivity.neighbors(node)):
+                        #     nodes_to_remove.append(neighbor)
             
             # Remove nodes
             for node in set(nodes_to_remove):

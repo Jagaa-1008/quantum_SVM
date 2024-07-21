@@ -115,7 +115,7 @@ import networkx as nx
 from minorminer import find_embedding
 
 class qSVM():
-    def __init__(self, data, label, B=2, K=2, Xi=1, gamma = 0.1, C=3, kernel="rbf", optimizer="SA", qubo_list = None, vis = 0):
+    def __init__(self, data, label, B=2, K=2, Xi=1, gamma = 0.1, C=3, kernel="rbf", optimizer="SA", qubo_list = None, embeddings = None, vis = 0):
         """
         :param B:
         :param K:
@@ -155,7 +155,7 @@ class qSVM():
         self._indices = None
         self.intercept = None
         self.energy = None
-        self.emb = None
+        self.emb = embeddings
         self.qubo_list = qubo_list
 
 
@@ -200,7 +200,7 @@ class qSVM():
         qubo, offset = model.to_qubo()
 
         return qubo_conversion(qubo)
-    
+
     def MTQA_solve(self, energy, alpha_result, data, label):
         self.energy = energy
         self.alpha_result = alpha_result
@@ -228,7 +228,7 @@ class qSVM():
         print("self.intercept", self.intercept)
 
         return self
-
+    
     def solve(self, data, label, i=None):
         print("solving...")
         qubo = self.makeQUBO(data, label)
@@ -243,7 +243,7 @@ class qSVM():
         
         elif self.optimizer == "QA":
             # ------- Set up D-Wave parameters -------
-            token = 'DEV-b3591d636174d4dcd3584a7ea29829d424e703b3' #happynice1008@gmail.com
+            token = 'DEV-3adb6333e41cfa2b8e54f63c2634a6fb2e333f71' #jagaa@t-ksj.co.jp
             endpoint = 'https://cloud.dwavesys.com/sapi/'
             dw_sampler = DWaveSampler(solver='Advantage_system6.4', token=token, endpoint=endpoint)
 
@@ -254,9 +254,17 @@ class qSVM():
                 best_sample = sampler.sample_qubo(qubo, num_reads=4000, annealing_time = 20, label='QA_SVM').first
 
             else:
-                print(i, len(self.qubo_list[i]))
-                best_sample = dw_sampler.sample_qubo(self.qubo_list[i], num_reads = 4000, annealing_time = 20, answer_mode = 'raw', auto_scale = False, label='QA_SVM').first
+                from dwave.embedding.chain_breaks import MinimizeEnergy as me
 
+                response = dw_sampler.sample_qubo(self.qubo_list[i], num_reads = 4000, annealing_time = 20, answer_mode = 'raw', auto_scale = False, label='QA_SVM')
+                bqm = dimod.BinaryQuadraticModel.from_qubo(qubo)
+                chain_break_method = me(bqm, self.emb[i])
+
+                if not isinstance(response, dimod.SampleSet):
+                    response = dimod.SampleSet.from_samples(response, energy=0, vartype=dimod.BINARY)
+
+                best_sample = unembed_sampleset(response, self.emb[i], bqm, chain_break_method=chain_break_method).first
+                
             self.energy = best_sample[1]
             self.alpha_result = list(best_sample[0].values())
             self.alpha_result = np.reshape(self.alpha_result,(self.K * self.N))
@@ -362,7 +370,7 @@ class MTQA_OneVsRestClassifier:
         """
         
         # ------- Set up D-Wave parameters -------
-        token = 'DEV-b3591d636174d4dcd3584a7ea29829d424e703b3' #happynice1008@gmail.com
+        token = 'DEV-3adb6333e41cfa2b8e54f63c2634a6fb2e333f71' #jagaa@t-ksj.co.jp
         endpoint = 'https://cloud.dwavesys.com/sapi/'
         dw_sampler = DWaveSampler(solver='Advantage_system6.4', token=token, endpoint=endpoint)
 

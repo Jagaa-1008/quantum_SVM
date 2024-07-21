@@ -44,7 +44,7 @@ def  plot_figure(clf, X, y, class_num, X_test, X_train, y_test, y_train, filenam
     predict = clf.predict(X_test)
     accuracy = accuracy_score(y_test, predict)*100
 
-    plt.title(f"Decision Boundary Accuracy: {accuracy:.2f}%")
+    # plt.title(f"Decision Boundary Accuracy: {accuracy:.2f}%")
 
     # Add labels
     labels = ['Test data', 'Train data']
@@ -107,14 +107,17 @@ def load_embedding(name):
     return convert_str_to_int(embedding)
 
 def convert_str_to_int(obj):
-    if isinstance(obj, dict):
+    return_obj = []
+    max_tmp = 0
+    for i in range(len(obj)):
         new_obj = {}
-        for k, v in obj.items():
-            new_key = int(k)
-            new_obj[new_key] = convert_str_to_int(v)
-        return new_obj
-    else:
-        return obj
+        for k, v in obj[i].items():
+            new_key = int(k) - max_tmp
+            new_obj[new_key] = v
+        
+        max_tmp += len(new_obj)
+        return_obj.append(new_obj)
+    return return_obj
     
 def save_TotalQubo(TotalQubo, name):    
     # Convert tuple keys to strings

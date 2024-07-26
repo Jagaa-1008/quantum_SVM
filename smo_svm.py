@@ -191,7 +191,7 @@ class smo_SVM(Solver):
         self.support_vectors = self.support_vectors[support_vectors_idx, :]
         self.alpha = self.alpha[support_vectors_idx]
 
-        print(f"Training summary: {iter_idx} iterations, {self.alpha.shape[0]} supprts vectors")
+        print(f"Training summary: {iter_idx} iterations, {self.alpha.shape[0]} support vectors")
         print("SVM training using SMO algorithm - DONE!")
 
     def i1_heuristic(

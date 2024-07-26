@@ -234,7 +234,7 @@ class qSVM():
         qubo = self.makeQUBO(data, label)
 
         if self.optimizer == "SA":
-            sampleset = neal.SimulatedAnnealingSampler().sample_qubo(qubo, num_reads=4000)
+            sampleset = neal.SimulatedAnnealingSampler().sample_qubo(qubo, num_reads=1000)
             best_sample = sampleset.first
             
             self.energy = best_sample[1]
@@ -256,7 +256,7 @@ class qSVM():
             else:
                 from dwave.embedding.chain_breaks import MinimizeEnergy as me
 
-                response = dw_sampler.sample_qubo(self.qubo_list[i], num_reads = 4000, annealing_time = 20, answer_mode = 'raw', auto_scale = False, label='QA_SVM')
+                response = dw_sampler.sample_qubo(self.qubo_list[i], num_reads = 1000, annealing_time = 20, answer_mode = 'raw', auto_scale = False, label='QA_SVM')
                 bqm = dimod.BinaryQuadraticModel.from_qubo(qubo)
                 chain_break_method = me(bqm, self.emb[i])
 
@@ -389,7 +389,7 @@ class MTQA_OneVsRestClassifier:
             identical_emb.append(slice_dict(sorted_dict, offset_list[i], offset_list[i+1]))
 
         # Solve all classifiers simultaneously with D-Wave mtqa
-        response = dw_sampler.sample_qubo(TotalQubo, num_reads = 4000, annealing_time = 20, answer_mode = 'raw', auto_scale = False, label='mtqa_SVM_UTC')
+        response = dw_sampler.sample_qubo(TotalQubo, num_reads = 1000, annealing_time = 20, answer_mode = 'raw', auto_scale = False, label='mtqa_SVM_UTC')
         time.sleep(10)
 
         energy = []

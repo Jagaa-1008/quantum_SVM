@@ -158,7 +158,6 @@ class qSVM():
         self.emb = embeddings
         self.qubo_list = qubo_list
 
-
     def rbf(self, x, y):
         # return np.exp(-self.gamma*(np.linalg.norm(x-y, ord=2)))
         return np.exp(-1.0 * self.gamma * np.dot(np.subtract(x, y).T, np.subtract(x, y)))
@@ -170,36 +169,53 @@ class qSVM():
                 K[i, j] = self.rbf(X[i], X[j])
         return K
 
-    def makeQUBO(self, data, label):
-        x = data
-        t = label
-        alpha = self.alpha
+    # def makeQUBO(self, data, label):
+    #     x = data
+    #     t = label
+    #     alpha = self.alpha
                 
-        energy = 0
-        for n in range(self.N):
-            for m in range(self.N):
+    #     energy = 0
+    #     for n in range(self.N):
+    #         for m in range(self.N):
+    #             for k in range(self.K):
+    #                 for j in range(self.K):
+    #                     alpha[self.K * n +k] * alpha[self.K * m +j] * t[n] * t[m] * self.rbf(x[n],x[m]) * self.B ** (k+j)
+
+    #     const_1=0
+    #     for n in range(self.N):
+    #         for k in range(self.K):
+    #             const_1 += alpha[self.K * n +k] * self.B ** k
+
+    #     const_2=0
+    #     for n in range(self.N):
+    #         for k in range(self.K):
+    #             const_2 += alpha[self.K * n +k] * t[n] * self.B ** k
+
+    #     const_2= const_2 ** 2
+
+    #     h = 0.5 * energy - const_1 + self.Xi * const_2
+
+    #     model = h.compile()
+    #     qubo, offset = model.to_qubo()
+
+    #     return qubo_conversion(qubo)
+    
+    def makeQUBO(self, data, label):
+        N = len(data)
+
+        Q = np.zeros((self.K*N,self.K*N))
+        print(f'Creating the QUBO of size {Q.shape}')
+        for n in range(N):
+            for m in range(N):
                 for k in range(self.K):
                     for j in range(self.K):
-                        alpha[self.K * n +k] * alpha[self.K * m +j] * t[n] * t[m] * self.rbf(x[n],x[m]) * self.B ** (k+j)
+                        Q[self.K*n+k, self.K*m+j] = .5 * self.B**(k+j) * label[n] * label[m] * (self.rbf(data[n], data[m]) + self.Xi)
+                        if n == m and k == j:
+                            Q[self.K*n+k,self.K*m+j] += - self.B**k
 
-        const_1=0
-        for n in range(self.N):
-            for k in range(self.K):
-                const_1 += alpha[self.K * n +k] * self.B ** k
-
-        const_2=0
-        for n in range(self.N):
-            for k in range(self.K):
-                const_2 += alpha[self.K * n +k] * t[n] * self.B ** k
-
-        const_2= const_2 ** 2
-
-        h = 0.5 * energy - const_1 + self.Xi * const_2
-
-        model = h.compile()
-        qubo, offset = model.to_qubo()
-
-        return qubo_conversion(qubo)
+        Q = np.triu(Q) + np.tril(Q,-1).T # turn the symmetric matrix into upper triangular
+        
+        return Q
 
     def MTQA_solve(self, energy, alpha_result, data, label):
         self.energy = energy
@@ -234,7 +250,7 @@ class qSVM():
         qubo = self.makeQUBO(data, label)
 
         if self.optimizer == "SA":
-            sampleset = neal.SimulatedAnnealingSampler().sample_qubo(qubo, num_reads=1000)
+            sampleset = neal.SimulatedAnnealingSampler().sample_qubo(qubo, num_reads=5000)
             best_sample = sampleset.first
             
             self.energy = best_sample[1]

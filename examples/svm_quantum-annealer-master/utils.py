@@ -22,23 +22,45 @@ def kernel(xn, xm, gamma=-1): # here (xn.shape: NxD, xm.shape: ...xD) -> Nx...
 # K = number of qubits per alpha
 
 # decode binary -> alpha
-def decode(binary, B=10, K=3):
+def decode(binary, B=2, K=2):
     N = len(binary) // K
     Bvec = B ** np.arange(K)
     return np.fromiter(binary,float).reshape(N,K) @ Bvec
 
 # encode alpha -> binary with B and K (for each n, the binary coefficients an,k such that sum_k an,k B**k is closest to alphan)
-def encode(alphas, B=10, K=3):
+def encode(alphas, B=2, K=2):
     N = len(alphas)
     Bvec = B ** np.arange(K) # 10^0 10^1 10^2 ...
     allvals = np.array(list(map(lambda n : np.fromiter(bin(n)[2:].zfill(K),float,K), range(2**K)))) @ Bvec # [[0,0,0],[0,0,1],...] @ [1, 10, 100]
     return ''.join(list(map(lambda n : bin(n)[2:].zfill(K),np.argmin(np.abs(allvals[:,None] - alphas), axis=0))))
 
-def encode_as_vec(alphas, B=10, K=3):
+def encode_as_vec(alphas, B=2, K=2):
     return np.fromiter(encode(alphas,B,K), float)
 
 def seqs_to_onehots(seqs): # from ../utils.py
     return np.asarray([np.asarray([[1 if bp == letter else 0 for letter in 'ACGT'] for bp in seq]).flatten() for seq in seqs])
+
+def eval_classifier(x, alphas, data, label, gamma, b=0): # evaluates the distance to the hyper plane according to 16.5.32 on p. 891 (Numerical Recipes); sign is the assigned class; x.shape = ...xD
+    return np.sum((alphas * label)[:,None] * kernel(data, x, gamma), axis=0) + b
+
+def eval_offset_avg(alphas, data, label, gamma, C, useavgforb=True): # evaluates offset b according to 16.5.33
+    cross = eval_classifier(data, alphas, data, label, gamma) # cross[i] = sum_j aj yj K(xj, xi) (error in Numerical Recipes)
+    if useavgforb:
+        return np.sum(alphas * (C-alphas) * (label - cross)) / np.sum(alphas * (C-alphas))
+    else:  # this is actually not used, but we did a similar-in-spirit implementation in eval_finaltraining_avgscore.py
+        if np.isclose(np.sum(alphas * (C-alphas)),0):
+            print('no support vectors found, discarding this classifer')
+            return np.nan
+        bcandidates = [np.sum(alphas * (C-alphas) * (label - cross)) / np.sum(alphas * (C-alphas))]  # average according to NR should be the first candidate
+        crosssorted = np.sort(cross)
+        crosscandidates = -(crosssorted[1:] + crosssorted[:-1])/2  # each value between f(xi) and the next higher f(xj) is a candidate
+        bcandidates += sorted(crosscandidates, key=lambda x:abs(x - bcandidates[0]))  # try candidates closest to the average first
+        bnumcorrect = [(label == np.sign(cross + b)).sum() for b in bcandidates]
+        return bcandidates[np.argmax(bnumcorrect)]
+
+def eval_acc_auroc_auprc(label, score):  # score is the distance to the hyper plane (output from eval_classifier)
+    precision,recall,_ = precision_recall_curve(label, score)
+    return accuracy_score(label,np.sign(score)), roc_auc_score(label,score), auc(recall,precision)
 
 def loadraw(key='mad50'): # key = 'mad50', 'myc99', ... basically from do-svm.py
     data = np.genfromtxt(f'data/intensities-{key[:3]}filtered', dtype=None, names=True, encoding=None, usecols=(0,1))

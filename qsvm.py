@@ -1,16 +1,17 @@
 import numpy as np
-from pyqubo import Array, Binary, Placeholder, Constraint, solve_qubo
 from itertools import combinations
-from sklearn.metrics import accuracy_score
 import math
-import neal
-from dwave.system import DWaveSampler, FixedEmbeddingComposite, EmbeddingComposite
 from collections import Counter
 from itertools import product
 import time 
 import dwave_networkx as dnx
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+import networkx as nx
+from minorminer import find_embedding
+from sklearn.metrics import accuracy_score, roc_auc_score, precision_recall_curve, auc
+from neal import SimulatedAnnealingSampler as SA
+from dwave.system import DWaveSampler, FixedEmbeddingComposite, EmbeddingComposite
 from MTQA import *
 
 class OneVsRestClassifier:
@@ -110,43 +111,25 @@ class OneVsRestClassifier:
         pred = self.predict(X)
         print("pred result",pred)
         return accuracy_score(y, pred)
-    
-import networkx as nx
-from minorminer import find_embedding
 
 class qSVM():
-    def __init__(self, data, label, B=2, K=2, Xi=1, gamma = 0.1, C=3, kernel="rbf", optimizer="SA", qubo_list = None, embeddings = None, vis = 0):
-        """
-        :param B:
-        :param K:
-        :param Xi:
-        :param gamma:
-        :param C: #still not used now
-        :param kernel: default; rbf only rbf for now,
-        :param optimizer:SA,QA
-        """
-        # self.data = data
-        # self.label = label
-        self.B = B
-        self.K = K
-        self.N = data.shape[0]
-        self.Xi = Xi
-        self.gamma = float(gamma)
-        self.C = C
-        self.kernel = kernel
-        self.vis = vis
-
-        self.options = {
-            'SA': {},
-            "QA": {}
-        }
-
-        self.optimizer = optimizer
-        self.alpha = Array.create('alpha', shape=self.K * self.N, vartype='BINARY') #number of spins : K*N
-
-        self.alpha_result = None
-        self.alpha_result_array = None
-        self.alpha_real = np.zeros((self.N,))
+    def __init__(self, B=2, K=2, Xi=1, gamma=0.1, kernel='rbf', optimizer = SA, num_reads=1000, qubo_list = None, embeddings = None):
+        self.B = B  # Base of the qubit representation (default: 2).
+        self.K = K  # Number of qubits per alpha (default: 2).
+        self.Xi = Xi  # Regularization parameter for the QUBO (default: 1).
+        self.gamma = gamma  # Kernel coefficient for the RBF kernel (default: 0.1).
+        self.C = np.sum(self.B ** (self.K)) # C = sum( B ** k)
+        self.kernel = kernel # Kernel function ('rbf' for now, can be extended) (default: 'rbf').
+        self.N = None # Number of data points
+        self.optimizer = optimizer # QUBO optimizer
+        self.num_reads = num_reads # Number of samples to generate during QUBO solving (default: 1000).
+        
+        # Attributes for storing model parameters and results
+        self.support_vectors = None # Support vectors identified during training.
+        self.alphas = None # Lagrange multipliers for the support vectors.
+        self.support_labels = None # Labels of the support vectors.
+        self.intercept = None # Intercept of the hyperplane.
+        self.energy = None  # Energy of the best QUBO solution found during training.
 
         self._support_vectors = None
         self._n_support = None
@@ -155,6 +138,7 @@ class qSVM():
         self._indices = None
         self.intercept = None
         self.energy = None
+        
         self.emb = embeddings
         self.qubo_list = qubo_list
 
@@ -168,37 +152,6 @@ class qSVM():
             for j in range(X.shape[0]):
                 K[i, j] = self.rbf(X[i], X[j])
         return K
-
-    # def makeQUBO(self, data, label):
-    #     x = data
-    #     t = label
-    #     alpha = self.alpha
-                
-    #     energy = 0
-    #     for n in range(self.N):
-    #         for m in range(self.N):
-    #             for k in range(self.K):
-    #                 for j in range(self.K):
-    #                     alpha[self.K * n +k] * alpha[self.K * m +j] * t[n] * t[m] * self.rbf(x[n],x[m]) * self.B ** (k+j)
-
-    #     const_1=0
-    #     for n in range(self.N):
-    #         for k in range(self.K):
-    #             const_1 += alpha[self.K * n +k] * self.B ** k
-
-    #     const_2=0
-    #     for n in range(self.N):
-    #         for k in range(self.K):
-    #             const_2 += alpha[self.K * n +k] * t[n] * self.B ** k
-
-    #     const_2= const_2 ** 2
-
-    #     h = 0.5 * energy - const_1 + self.Xi * const_2
-
-    #     model = h.compile()
-    #     qubo, offset = model.to_qubo()
-
-    #     return qubo_conversion(qubo)
     
     def makeQUBO(self, data, label):
         N = len(data)
@@ -339,18 +292,6 @@ class qSVM():
     def evaluate(self, X, y):
         pred = self.predict(X)
         return accuracy_score(y, pred)
-    
-def qubo_conversion(qubo_dic):
-    qubo_dict = {}
-    for (key, value) in qubo_dic.items():
-        # Extract numbers from the strings assuming format is 'alpha[n]'
-        i_num = int(key[0].split('[')[1].split(']')[0])
-        j_num = int(key[1].split('[')[1].split(']')[0])
-        qubo_dict[(i_num, j_num)] = value
-
-    sorted_qubo_dict = dict(sorted(qubo_dict.items()))
-
-    return sorted_qubo_dict
     
 def slice_dict(d, start, end):
     """Slices a dictionary from start index to end index."""

@@ -142,29 +142,42 @@ class qSVM():
     
     def _make_qubo(self, X, y):
         """Constructs the Quadratic Unconstrained Binary Optimization (QUBO) problem."""
-        self.N = X.shape[0]        
-        Q = np.zeros((self.K * self.N, self.K * self.N))
-        print(f'Creating the QUBO of size {Q.shape}')
+        self.N = X.shape[0]
+        Q_dict = {}
         for n in range(self.N):
-            for m in range(self.N):
+            for m in range(n, self.N):  # Iterate from n to N (inclusive) to only calculate the upper triangle 
                 for k in range(self.K):
-                    for j in range(self.K):
-                        Q[self.K * n + k, self.K * m + j] = (
+                    for j in range(k, self.K):  # Iterate from k to K (inclusive)
+                        Q_value = (
                             0.5 * self.B**(k + j) * y[n] * y[m] * (self.rbf_kernel(X[n], X[m]) + self.Xi)
                             - (self.B**k if n == m and k == j else 0)
                         )
-                        
-        Q = np.triu(Q) + np.tril(Q, -1).T  # Ensure symmetry and upper triangular form
-                
-        Q_dict = {}  # Initialize the QUBO dictionary
-        for n in range(self.N):
-            for m in range(self.N):
-                for k in range(self.K):
-                    for j in range(self.K):
-                        if Q[self.K * n + k, self.K * m + j] != 0:
-                            Q_dict[(self.K * n + k, self.K * m + j)] = Q[self.K * n + k, self.K * m + j]
-        
+                        # Store in dictionary only if non-zero
+                        if Q_value != 0:
+                            Q_dict[(self.K * n + k, self.K * m + j)] = Q_value
+
         return Q_dict
+        # Q = np.zeros((self.K * self.N, self.K * self.N))
+        # print(f'Creating the QUBO of size {Q.shape}')
+        # for n in range(self.N):
+        #     for m in range(self.N):
+        #         for k in range(self.K):
+        #             for j in range(self.K):
+        #                 Q[self.K * n + k, self.K * m + j] = (
+        #                     0.5 * self.B**(k + j) * y[n] * y[m] * (self.rbf_kernel(X[n], X[m]) + self.Xi)
+        #                     - (self.B**k if n == m and k == j else 0)
+        #                 )
+                        
+        # Q = np.triu(Q) + np.tril(Q, -1).T  # nsure symmetry and upper triangular form
+                
+        # Q_dict = {}  # Initialize the QUBO dictionary
+        # for n in range(self.N):
+        #     for m in range(self.N):
+        #         for k in range(self.K):
+        #             for j in range(self.K):
+        #                 if Q[self.K * n + k, self.K * m + j] != 0:
+        #                     Q_dict[(self.K * n + k, self.K * m + j)] = Q[self.K * n + k, self.K * m + j]
+        
 
     def MTQA_solve(self, binary_result, energy, X, y):
         alpha_real = self._decode(binary_result)
@@ -243,23 +256,34 @@ class qSVM():
         if self.optimizer == SA:
             sampleset = self.optimizer().sample_qubo(qubo, num_reads=self.num_reads)
         elif self.optimizer == dwave_QA:
-            response = self.optimizer().sample_qubo(self.qubo_list[i], num_reads = self.num_reads, annealing_time = self.annealing_time, answer_mode = 'raw', auto_scale = False, label='QA_SVM')
-            bqm = dimod.BinaryQuadraticModel.from_qubo(qubo)
-            chain_break_method = me(bqm, self.emb[i])
+            # ------- Set up D-Wave parameters -------
+            token = 'DEV-3adb6333e41cfa2b8e54f63c2634a6fb2e333f71' #jagaa@t-ksj.co.jp
+            endpoint = 'https://cloud.dwavesys.com/sapi/'
+            dw_sampler = DWaveSampler(solver='Advantage_system6.4', token=token, endpoint=endpoint)
 
-            if not isinstance(response, dimod.SampleSet):
-                response = dimod.SampleSet.from_samples(response, energy=0, vartype=dimod.BINARY)
+            if not self.qubo_list:
+                hardware = nx.Graph(dw_sampler.edgelist)
+                emb = find_embedding(qubo, hardware, tries=3, max_no_improvement=3, chainlength_patience=10, timeout=5, threads=100)
+                sampler = FixedEmbeddingComposite(dw_sampler, embedding=emb)
+                sampleset = sampler.sample_qubo(qubo, num_reads=1000, annealing_time = 100, label='QA_SVM')
+            else:
+                response = self.optimizer().sample_qubo(self.qubo_list[i], num_reads = self.num_reads, annealing_time = self.annealing_time, answer_mode = 'raw', auto_scale = False, label='QA_SVM')
+                bqm = dimod.BinaryQuadraticModel.from_qubo(qubo)
+                chain_break_method = me(bqm, self.emb[i])
 
-            sampleset = unembed_sampleset(response, self.emb[i], bqm, chain_break_method=chain_break_method)
-            
-            if self.vis:
-                clr_dict = {}
-                for i, j in self.emb[i].items():
-                    clr_dict[i] = "Red"
-                    
-                dnx.draw_pegasus_embedding(dnx.pegasus_graph(16), self.emb[i], crosses=False, chain_color = clr_dict, unused_color = "#CCCCCC", width=0.3, node_size = 0.5)
+                if not isinstance(response, dimod.SampleSet):
+                    response = dimod.SampleSet.from_samples(response, energy=0, vartype=dimod.BINARY)
+
+                sampleset = unembed_sampleset(response, self.emb[i], bqm, chain_break_method=chain_break_method)
                 
-                plt.show()
+                if self.vis:
+                    clr_dict = {}
+                    for i, j in self.emb[i].items():
+                        clr_dict[i] = "Red"
+                        
+                    dnx.draw_pegasus_embedding(dnx.pegasus_graph(16), self.emb[i], crosses=False, chain_color = clr_dict, unused_color = "#CCCCCC", width=0.3, node_size = 0.5)
+                    
+                    plt.show()
         else:
             raise ValueError("Selected solver is not supported.")
         

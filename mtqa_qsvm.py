@@ -143,20 +143,21 @@ class qSVM():
     def _make_qubo(self, X, y):
         """Constructs the Quadratic Unconstrained Binary Optimization (QUBO) problem."""
         self.N = X.shape[0]
-        Q_dict = {}
+        qubo = {}  # Use a more descriptive variable name
+
         for n in range(self.N):
-            for m in range(n, self.N):  # Iterate from n to N (inclusive) to only calculate the upper triangle 
+            for m in range(n, self.N):  # Iterate upper triangle only
                 for k in range(self.K):
-                    for j in range(k, self.K):  # Iterate from k to K (inclusive)
-                        Q_value = (
+                    for j in range(k, self.K):
+                        coefficient = (
                             0.5 * self.B**(k + j) * y[n] * y[m] * (self.rbf_kernel(X[n], X[m]) + self.Xi)
                             - (self.B**k if n == m and k == j else 0)
                         )
-                        # Store in dictionary only if non-zero
-                        if Q_value != 0:
-                            Q_dict[(self.K * n + k, self.K * m + j)] = Q_value
+                        
+                        if coefficient != 0:  # Store only non-zero elements
+                            qubo[(self.K * n + k, self.K * m + j)] = coefficient
 
-        return Q_dict
+        return qubo
         # Q = np.zeros((self.K * self.N, self.K * self.N))
         # print(f'Creating the QUBO of size {Q.shape}')
         # for n in range(self.N):
@@ -202,7 +203,7 @@ class qSVM():
         Bvec = self.B ** np.arange(self.K)
         avec = np.array(binary_sol, float).reshape(self.N, self.K)
         alpha = avec @ Bvec
-        print("alphas : ", alpha)
+        # print("alphas : ", alpha)
         return alpha
         # return (np.fromiter(binary_sol, float).reshape(self.N, self.K) @ Bvec).flatten()
 
@@ -265,7 +266,7 @@ class qSVM():
                 hardware = nx.Graph(dw_sampler.edgelist)
                 emb = find_embedding(qubo, hardware, tries=3, max_no_improvement=3, chainlength_patience=10, timeout=5, threads=100)
                 sampler = FixedEmbeddingComposite(dw_sampler, embedding=emb)
-                sampleset = sampler.sample_qubo(qubo, num_reads=1000, annealing_time = 100, label='QA_SVM')
+                sampleset = sampler.sample_qubo(qubo, num_reads=1000, annealing_time = 20, label='QA_SVM')
             else:
                 response = self.optimizer().sample_qubo(self.qubo_list[i], num_reads = self.num_reads, annealing_time = self.annealing_time, answer_mode = 'raw', auto_scale = False, label='QA_SVM')
                 bqm = dimod.BinaryQuadraticModel.from_qubo(qubo)
@@ -329,7 +330,7 @@ def slice_dict(d, start, end):
 from dwave.system import DWaveSampler, FixedEmbeddingComposite, EmbeddingComposite
 
 class MTQA_OneVsRestClassifier:
-    def __init__(self, class_num, classifier, params=None, vis = 0):
+    def __init__(self, class_num, classifier, params, vis = 0):
         """
         Initialize an ensemble of binary classifiers, one for each class.
         
@@ -374,7 +375,7 @@ class MTQA_OneVsRestClassifier:
             identical_emb.append(slice_dict(sorted_dict, offset_list[i], offset_list[i+1]))
 
         # Solve all classifiers simultaneously with D-Wave mtqa
-        response = dw_sampler.sample_qubo(TotalQubo, num_reads = 1000, annealing_time = 100, answer_mode = 'raw', auto_scale = False, label='mtqa_SVM_UTC')
+        response = dw_sampler.sample_qubo(TotalQubo, num_reads = 1000, annealing_time = 20, answer_mode = 'raw', auto_scale = False, label='mtqa_SVM_UTC')
         time.sleep(10)
 
         energy = []

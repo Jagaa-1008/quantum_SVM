@@ -1,6 +1,0 @@
-@inproceedings{dema2020support,
-  title={Support vector machine for multiclass classification using quantum annealers},
-  author={Dema, B and Arai, Junya and Horikawa, Keitarou},
-  booktitle={Proc. DEIM Forum},
-  year={2020}
-}

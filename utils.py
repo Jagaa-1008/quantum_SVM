@@ -20,7 +20,7 @@ def  plot_figure(clf, X, y, class_num, X_test, X_train, y_test, y_train, filenam
         plt.contourf(xx, yy, Z, **params)
 
     # Set up plot figures
-    fig, sub = plt.subplots(figsize=(5, 5))
+    plt.subplots(figsize=(5, 5))
 
     # Create meshgrid
     X0, X1 = X[:, 0], X[:, 1]
@@ -30,21 +30,25 @@ def  plot_figure(clf, X, y, class_num, X_test, X_train, y_test, y_train, filenam
     coolwarm = plt.cm.coolwarm
     colors = coolwarm(np.linspace(0, 1, class_num))
     cm = ListedColormap(colors)
+    
+    # Create a normalization object to ensure consistent color mapping
+    norm = plt.Normalize(vmin=0, vmax=class_num - 1)
 
     # Plot decision boundaries and data points for clf
     plot_contours(clf, xx, yy, cmap=cm, alpha=0.6)
-    plt.scatter(X_test[:, 0], X_test[:, 1], c=y_test, cmap=cm, marker='^', edgecolors='k', s=20)
-    plt.scatter(X_train[:, 0], X_train[:, 1], c=y_train, cmap=cm, marker='o', edgecolors='k', s=20)
+    plt.scatter(X_test[:, 0], X_test[:, 1], c=y_test, cmap=cm, marker='^', edgecolors='k', s=20, norm=norm)
+    plt.scatter(X_train[:, 0], X_train[:, 1], c=y_train, cmap=cm, marker='o', edgecolors='k', s=20, norm=norm)
 
     # Compute and plot centroids
     centroids = np.array([X[y == i].mean(axis=0) for i in np.unique(y)])
     plt.scatter(centroids[:, 0], centroids[:, 1], marker='x', s=169, linewidths=3, color='g', zorder=10)
 
     # Predict
-    predict = clf.predict(X_test)
-    accuracy = accuracy_score(y_test, predict)*100
-
+    # predict = clf.predict(X_test)
+    # accuracy = accuracy_score(y_test, predict)*100
     # plt.title(f"Decision Boundary Accuracy: {accuracy:.2f}%")
+    
+    # plt.colorbar(boundaries=np.arange(class_num + 1) - 0.5, cmap=cm, norm=norm).set_ticks(np.arange(class_num))
 
     # Add labels
     labels = ['Test data', 'Train data']

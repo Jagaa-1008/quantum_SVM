@@ -10,7 +10,7 @@ from neal import SimulatedAnnealingSampler as SA
 from dwave.embedding.chain_breaks import MinimizeEnergy as me
 
 from MTQA import *
-from solver_config import dwave_QA, dwave_MTQA
+# from solver_config import dwave_QA, dwave_MTQA
 
 class OneVsRestClassifier:
     def __init__(self, class_num, classifier, params=None):
@@ -37,12 +37,12 @@ class OneVsRestClassifier:
         - x (array): Feature data.
         - y (array): True labels.
         """
-        for i in range(self.class_num):
+        for i in range(self.class_num)):
             print(f"Training classifier {i}...")
-            self.classifiers[i].fit(x, self.re_labaling(y, i), i)
+            self.classifiers[i].fit(x, self.relabel(y, i), i)
         return self
 
-    def re_labaling(self, y, pos_label):
+    def relabel(self, y, pos_label):
         """
         Relabel the dataset for a binary classification task.
         
@@ -90,7 +90,6 @@ class OneVsRestClassifier:
 
     def predict(self, X):
         result = np.array([model.predict(X) for model in self.classifiers])
-        # print("result123", result)
         #print("result type and shape", type(result), result.shape)
         #result type and shape <class 'numpy.ndarray'> (3, 150)
         return self.argmax_by_E(result)
@@ -111,7 +110,7 @@ class OneVsRestClassifier:
         return accuracy_score(y, pred)
 
 class qSVM():
-    def __init__(self, B=2, K=2, Xi=1, gamma=0.1, kernel='rbf', optimizer = {SA, dwave_QA, dwave_MTQA}, num_reads=1000, qubo_list = None, embeddings = None, annealing_time = 20, vis = None):
+    def __init__(self, B=2, K=2, Xi=1, gamma=0.1, kernel='rbf', optimizer = {SA}, num_reads=1000, qubo_list = None, embeddings = None, annealing_time = 20, vis = None):
         self.B = B  # Base of the qubit representation (default: 2).
         self.K = K  # Number of qubits per alpha (default: 2).
         self.Xi = Xi  # Regularization parameter for the QUBO (default: 1).
@@ -148,7 +147,7 @@ class qSVM():
         for n in range(self.N):
             for m in range(n, self.N):  # Iterate upper triangle only
                 for k in range(self.K):
-                    for j in range(k, self.K):
+                    for j in range(self.K):
                         coefficient = (
                             0.5 * self.B**(k + j) * y[n] * y[m] * (self.rbf_kernel(X[n], X[m]) + self.Xi)
                             - (self.B**k if n == m and k == j else 0)
@@ -179,18 +178,17 @@ class qSVM():
         #                 if Q[self.K * n + k, self.K * m + j] != 0:
         #                     Q_dict[(self.K * n + k, self.K * m + j)] = Q[self.K * n + k, self.K * m + j]
         
+        # return Q_dict
 
     def MTQA_solve(self, binary_result, energy, X, y):
         alpha_real = self._decode(binary_result)
         self.energy = energy
         
         support_indices = (alpha_real >= 0) & (alpha_real <= self.C)
-        # print("support_indices : ", support_indices)
+        
         self.support_vectors = X[support_indices]
         self.alphas = alpha_real[support_indices]
         self.support_labels = y[support_indices]
-        # print("self.support_vectors : ", self.support_vectors)
-        # print("support labels : ", self.support_labels)
         
         self.intercept = self.b_offset(X, y)
         print("intercept : ", self.intercept)
@@ -256,7 +254,7 @@ class qSVM():
         qubo = self._make_qubo(X, y)
         if self.optimizer == SA:
             sampleset = self.optimizer().sample_qubo(qubo, num_reads=self.num_reads)
-        elif self.optimizer == dwave_QA:
+        elif self.optimizer == "QA":
             # ------- Set up D-Wave parameters -------
             token = 'DEV-3adb6333e41cfa2b8e54f63c2634a6fb2e333f71' #jagaa@t-ksj.co.jp
             endpoint = 'https://cloud.dwavesys.com/sapi/'
@@ -296,12 +294,9 @@ class qSVM():
         
         support_indices = (alpha_real >= 0) & (alpha_real <= self.C)
         
-        # print("support_indices : ", support_indices)
         self.support_vectors = X[support_indices]
         self.alphas = alpha_real[support_indices]
         self.support_labels = y[support_indices]
-        # print("self.support_vectors : ", self.support_vectors)
-        # print("support labels : ", self.support_labels)
         
         self.intercept = self.b_offset(X, y)
         print("intercept : ", self.intercept)
@@ -365,7 +360,7 @@ class MTQA_OneVsRestClassifier:
 
         qubolist = []
         for i in range(self.class_num):
-            qubolist.append(self.classifiers[i]._make_qubo(x, self.re_labaling(y, i)))
+            qubolist.append(self.classifiers[i]._make_qubo(x, self.relabel(y, i)))
 
         embeddings, embedding_list, TotalQubo, Qubo_list, offset_list, Qubits, Qubo_logic = embedding_search(hardware, qubolist, chain_strategy="utc")
 
@@ -375,25 +370,21 @@ class MTQA_OneVsRestClassifier:
             identical_emb.append(slice_dict(sorted_dict, offset_list[i], offset_list[i+1]))
 
         # Solve all classifiers simultaneously with D-Wave mtqa
-        response = dw_sampler.sample_qubo(TotalQubo, num_reads = 1000, annealing_time = 20, answer_mode = 'raw', auto_scale = False, label='mtqa_SVM_UTC')
+        response = dw_sampler.sample_qubo(TotalQubo, num_reads = 1000, annealing_time = 100, answer_mode = 'raw', auto_scale = False, label='mtqa_SVM_UTC')
         time.sleep(10)
 
-        energy = []
-        binary_sol = []
+        # energy = [[]] * self.class_num
+        # binary_sol = [[]] * self.class_num
         comb_sol, unembed_t = unembed_combined_solution(response, identical_emb, Qubo_logic, offset_list, 'minimize_energy')
-        for i in range(self.class_num):
-            sol = []
-            for i, sol_res in enumerate(comb_sol):
-                xx, yy = offset_list[i], offset_list[i+1]
-                re, decode_time = response_decoder(sol_res, xx, yy, Qubo_logic)
-                if re:
-                    sol += re
-            
-            energy.append(min(sol, key=lambda x: x[1])[1] if sol else None)
-            binary_sol.append(min(sol, key=lambda x: x[1])[0] if sol else None)
 
-        for i in range(self.class_num):
-            self.classifiers[i].MTQA_solve(binary_sol[i], energy[i], x, self.re_labaling(y, i))
+        for i, sol_res in enumerate(comb_sol):
+            xx, yy = offset_list[i], offset_list[i+1]
+            sol, decode_time = response_decoder(sol_res, xx, yy, Qubo_logic)
+        
+            energy = min(sol, key=lambda x: x[1])[1] if sol else None
+            binary_sol = min(sol, key=lambda x: x[1])[0] if sol else None
+
+            self.classifiers[i].MTQA_solve(binary_sol, energy[0][0], x, self.relabel(y, i))
 
         if self.vis:
             problems = ["Class 0", "Class 1", "Class 2", "Class 3", "Class 4"]
@@ -423,7 +414,7 @@ class MTQA_OneVsRestClassifier:
 
         return self, embedding_list, TotalQubo, Qubo_list
 
-    def re_labaling(self, y, pos_label):
+    def relabel(self, y, pos_label):
         """
         Relabel the dataset for a binary classification task.
         

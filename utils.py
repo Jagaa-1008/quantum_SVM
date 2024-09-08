@@ -175,3 +175,21 @@ def convert_str_keys_to_tuple(obj):
         return [convert_str_keys_to_tuple(e) for e in obj]
     else:
         return obj
+    
+def save_Qubo_logic(Qubo_logic, name):
+    filename = "data/{name}_Qubo_logic.json"
+
+    # Convert tuple keys to strings
+    Qubo_logic_str_keys = {str(k): v for k, v in Qubo_logic.items()}
+
+    with open(filename, 'w') as f:
+        json.dump(Qubo_logic_str_keys, f)
+
+def load_Qubo_logic(n):
+    filename = "data/{name}_Qubo_logic.json"
+    
+    with open(filename, 'r') as f:
+        Qubo_logic_str_keys = json.load(f)
+    
+    # Convert string keys back to tuples
+    return {tuple(map(int, k.strip('()').split(', '))): v for k, v in Qubo_logic_str_keys.items()}

@@ -10,7 +10,7 @@ from neal import SimulatedAnnealingSampler as SA
 from dwave.embedding.chain_breaks import MinimizeEnergy as me
 
 from MTQA import *
-# from solver_config import dwave_QA, dwave_MTQA
+from solver_config import dwave_QA, dwave_MTQA
 
 class OneVsRestClassifier:
     def __init__(self, class_num, classifier, params=None):
@@ -37,7 +37,7 @@ class OneVsRestClassifier:
         - x (array): Feature data.
         - y (array): True labels.
         """
-        for i in range(self.class_num)):
+        for i in range(self.class_num):
             print(f"Training classifier {i}...")
             self.classifiers[i].fit(x, self.relabel(y, i), i)
         return self
@@ -110,12 +110,12 @@ class OneVsRestClassifier:
         return accuracy_score(y, pred)
 
 class qSVM():
-    def __init__(self, B=2, K=2, Xi=1, gamma=0.1, kernel='rbf', optimizer = {SA}, num_reads=1000, qubo_list = None, embeddings = None, annealing_time = 20, vis = None):
+    def __init__(self, B=2, K=2, Xi=1, gamma=0.1, kernel='rbf', optimizer = {SA, dwave_QA, dwave_MTQA}, num_reads=1000, qubo_list = None, qubo_logic = None, embeddings = None, annealing_time = 20, vis = None):
         self.B = B  # Base of the qubit representation (default: 2).
         self.K = K  # Number of qubits per alpha (default: 2).
         self.Xi = Xi  # Regularization parameter for the QUBO (default: 1).
         self.gamma = gamma  # Kernel coefficient for the RBF kernel (default: 0.1).
-        self.C = np.sum(self.B ** (self.K)) # C = sum( B ** k)
+        self.C = np.sum(self.B ** (np.arange(self.K))) # C = sum_0^(k-1) ( B ** k)
         self.kernel = kernel # Kernel function ('rbf' for now, can be extended) (default: 'rbf').
         self.N = None # Number of data points
         self.optimizer = optimizer # QUBO optimizer
@@ -131,18 +131,57 @@ class qSVM():
         
         self.emb = embeddings
         self.qubo_list = qubo_list
+        self.qubo_logic = qubo_logic
         self.vis = vis
 
-    def rbf_kernel(self, X, Y):
-        """Calculates the Radial Basis Function (RBF) kernel matrix."""
-        XX = np.atleast_2d(X)
-        YY = np.atleast_2d(Y)
-        return np.exp(-self.gamma * np.sum((XX[:, np.newaxis] - YY[np.newaxis, :]) ** 2, axis=-1))
+    # def rbf_kernel(self, xn, xm):
+    #     """Calculates the Radial Basis Function (RBF) kernel matrix."""
+    #     Xn = np.atleast_2d(xn)
+    #     Xm = np.atleast_2d(xm)
+    #     return np.exp(-self.gamma * np.sum((Xn[:, np.newaxis] - Xm[np.newaxis, :]) ** 2, axis=-1))
+    
+    def rbf_kernel(self, u, v):
+        """
+        RBF kernel implementation, i.e. K(u,v) = exp(-gamma_rbf*|u-v|^2).
+        gamma is a hyper parameter of the model.
+
+        Arguments:
+            u: an (N,) vector or (N,D) matrix,
+
+            v: if u is a vector, v must have the same dimension
+               if u is a matrix, v can be either an (N,) or (N,D) matrix.
+
+        Return:
+            K(u,v): kernel matrix as follows:
+                    case 1: u, v are both vectors:
+                        K(u,v): a scalar K=u.T*v
+
+                    case 2: u is a matrix, v is a vector
+                        K(u,v): (N,) vector, the i-th element corresponds to K(u[i,:],v)
+
+                    case 3: u and V are both matrices
+                        k(u,v): (N,D) matrix, the i,j entry corresponds to K(u[i,:],v[j,:])
+        """
+
+        # In case u, v are vectors, convert to row vector
+        if np.ndim(v) == 1:
+            v = v[np.newaxis, :]
+
+        if np.ndim(u) == 1:
+            u = u[np.newaxis, :]
+
+        # Broadcast to (N,D,M) array
+        # Element [i,:,j] is the difference between i-th row in u and j-th row in v
+        # Squared norm along second axis, to get the norm^2 of all possible differences, results an (N,M) array
+        dist_squared = np.linalg.norm(u[:, :, np.newaxis] - v.T[np.newaxis, :, :], axis=1) ** 2
+        dist_squared = np.squeeze(dist_squared)
+
+        return np.exp(-self.gamma * dist_squared)
     
     def _make_qubo(self, X, y):
         """Constructs the Quadratic Unconstrained Binary Optimization (QUBO) problem."""
         self.N = X.shape[0]
-        qubo = {}  # Use a more descriptive variable name
+        qubo = {}
 
         for n in range(self.N):
             for m in range(n, self.N):  # Iterate upper triangle only
@@ -197,11 +236,11 @@ class qSVM():
     
     def _decode(self, binary_sol):
         """Decodes binary QUBO results into alpha values."""
-        # print(binary_sol)
         Bvec = self.B ** np.arange(self.K)
         avec = np.array(binary_sol, float).reshape(self.N, self.K)
         alpha = avec @ Bvec
         # print("alphas : ", alpha)
+
         return alpha
         # return (np.fromiter(binary_sol, float).reshape(self.N, self.K) @ Bvec).flatten()
 
@@ -254,24 +293,21 @@ class qSVM():
         qubo = self._make_qubo(X, y)
         if self.optimizer == SA:
             sampleset = self.optimizer().sample_qubo(qubo, num_reads=self.num_reads)
-        elif self.optimizer == "QA":
-            # ------- Set up D-Wave parameters -------
-            token = 'DEV-3adb6333e41cfa2b8e54f63c2634a6fb2e333f71' #jagaa@t-ksj.co.jp
-            endpoint = 'https://cloud.dwavesys.com/sapi/'
-            dw_sampler = DWaveSampler(solver='Advantage_system6.4', token=token, endpoint=endpoint)
-
+        elif self.optimizer == dwave_QA:
             if not self.qubo_list:
-                hardware = nx.Graph(dw_sampler.edgelist)
+                hardware = nx.Graph(self.optimizer().edgelist)
                 emb = find_embedding(qubo, hardware, tries=3, max_no_improvement=3, chainlength_patience=10, timeout=5, threads=100)
-                sampler = FixedEmbeddingComposite(dw_sampler, embedding=emb)
+                sampler = FixedEmbeddingComposite(self.optimizer(), embedding=emb)
                 sampleset = sampler.sample_qubo(qubo, num_reads=1000, annealing_time = 20, label='QA_SVM')
             else:
                 response = self.optimizer().sample_qubo(self.qubo_list[i], num_reads = self.num_reads, annealing_time = self.annealing_time, answer_mode = 'raw', auto_scale = False, label='QA_SVM')
+                # bqm = dimod.BinaryQuadraticModel.from_qubo(self.qubo_list[i])
                 bqm = dimod.BinaryQuadraticModel.from_qubo(qubo)
+
                 chain_break_method = me(bqm, self.emb[i])
 
-                if not isinstance(response, dimod.SampleSet):
-                    response = dimod.SampleSet.from_samples(response, energy=0, vartype=dimod.BINARY)
+                # if not isinstance(response, dimod.SampleSet):
+                #     response = dimod.SampleSet.from_samples(response, energy=0, vartype=dimod.BINARY)
 
                 sampleset = unembed_sampleset(response, self.emb[i], bqm, chain_break_method=chain_break_method)
                 
@@ -286,7 +322,6 @@ class qSVM():
         else:
             raise ValueError("Selected solver is not supported.")
         
-        # print(sampleset.record['sample'])
         sample = sampleset.record['sample'][0]
         self.energy = sampleset.first.energy
 
@@ -384,7 +419,7 @@ class MTQA_OneVsRestClassifier:
             energy = min(sol, key=lambda x: x[1])[1] if sol else None
             binary_sol = min(sol, key=lambda x: x[1])[0] if sol else None
 
-            self.classifiers[i].MTQA_solve(binary_sol, energy[0][0], x, self.relabel(y, i))
+            self.classifiers[i].MTQA_solve(binary_sol, energy, x, self.relabel(y, i))
 
         if self.vis:
             problems = ["Class 0", "Class 1", "Class 2", "Class 3", "Class 4"]
@@ -477,4 +512,80 @@ class MTQA_OneVsRestClassifier:
         """
         pred = self.predict(X)
         print("pred result",pred)
+        return accuracy_score(y, pred)
+
+class OneVsOneClassifier:
+    def __init__(self, class_num, classifier, params=None):
+        """
+        Initialize an ensemble of binary classifiers, one for each pair of classes.
+
+        Parameters:
+        - class_num (int): Number of classes.
+        - classifier (class): Classifier class to be instantiated for each pair of classes.
+        - params (dict, optional): Parameters to pass to each classifier instance.
+        """
+        self.class_num = class_num
+        self.classifiers = {}  # Store classifiers in a dictionary for easy access
+
+        # Create classifiers for all unique pairs of classes
+        for i in range(class_num):
+            for j in range(i + 1, class_num):
+                if params is None:
+                    self.classifiers[(i, j)] = classifier()
+                else:
+                    self.classifiers[(i, j)] = classifier(**params)
+
+    def solve(self, x, y):
+        """
+        Train each binary classifier on the dataset.
+
+        Parameters:
+        - x (array): Feature data.
+        - y (array): True labels.
+        """
+        for (i, j), clf in self.classifiers.items():
+            print(f"Training classifier for classes {i} vs {j}...")
+
+            # Filter data for the two classes
+            mask = (y == i) | (y == j)
+            x_filtered = x[mask]
+            y_filtered = y[mask]
+
+            # Relabel for binary classification
+            y_relabeled = np.where(y_filtered == i, 1, -1)
+
+            clf.fit(x_filtered, y_relabeled)
+        return self
+
+    def predict(self, X):
+        """
+        Predict class labels for new data points using majority voting.
+
+        Parameters:
+        - X (array): Feature data.
+
+        Returns:
+        - Array of predicted class labels.
+        """
+        votes = np.zeros((X.shape[0], self.class_num))
+
+        for (i, j), clf in self.classifiers.items():
+            predictions = clf.predict(X)
+            votes[predictions == 1, i] += 1
+            votes[predictions == -1, j] += 1
+
+        return np.argmax(votes, axis=1)
+
+    def evaluate(self, X, y):
+        """
+        Evaluate the classifier's performance on the given test data.
+
+        Parameters:
+        - X (array): Feature data.
+        - y (array): True labels.
+
+        Returns:
+        - Accuracy of the classifier as a float.
+        """
+        pred = self.predict(X)
         return accuracy_score(y, pred)

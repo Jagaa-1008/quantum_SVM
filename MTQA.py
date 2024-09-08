@@ -88,7 +88,7 @@ def embedding_search(hardware_connectivity, QuboList, chain_strategy):
         if emb:
             # Find the chain strength for the current Qubo
             if chain_strategy == "utc":
-                chain_strength = find_chain_strength(Qubo_temp, prefactor = 1.414, method = "UTC")
+                chain_strength = find_chain_strength(Qubo_temp, prefactor = 1.0, method = "UTC")
             else:
                 chain_strength = find_chain_strength(Qubo_temp, prefactor = 1, method = "scaled")
 
